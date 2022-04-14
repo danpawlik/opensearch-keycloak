@@ -73,3 +73,51 @@ Keycloak admin console: https://172.17.0.1:8443
 OpenSearch Dashboards: https://172.17.0.1:5601
 
 > Use the values in the `.env` to connect to both.
+
+## Quick setup on Centos 8
+
+```bash
+sudo yum install -y yum-utils git jq
+sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo yum install -y docker-ce docker-ce-cli containerd.io
+sudo systemctl start docker
+git clone https://github.com/bob-california/opensearch-keycloak.git && cd opensearch-keycloak/
+sudo curl -L "https://github.com/docker/compose/releases/download/1.27.4/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod 0755 /usr/local/bin/docker-compose
+sudo sysctl -w vm.max_map_count=262144
+
+export PATH=/usr/local/bin/:$PATH
+
+LOCAL_IP=$(ip route get 1.1.1.1 | grep -oP 'src \K\S+')
+ls | xargs sed -i "s/172.17.0.1/$LOCAL_IP/g"
+sed -i "s/172.17.0.1/$LOCAL_IP/g" .env
+
+./setup_certs.sh
+chmod 0777 -R certs
+
+# docker login docker.io
+
+/usr/local/bin/docker-compose up -d keycloak postgres
+sleep 60
+./setup_keycloak.sh
+
+docker-compose up -d os01 os02 os03
+sleep 60
+./security_admin.sh
+
+# ensure that all is fine
+/usr/local/bin/docker-compose up -d
+```
+
+If you need to tunel the traffic via ssh:
+
+```bash
+sudo ssh -L 9200:localhost:9200 \
+         -L 9300:localhost:9300 \
+         -L 9600:localhost:9600 \
+         -L 9650:localhost:9650 \
+         -L 5601:localhost:5601 \
+         -L 8080:localhost:8080 \
+         -L 8443:localhost:8443 \
+         -L 5432:localhost:5432 <YOUR HOST> -l centos
+```
